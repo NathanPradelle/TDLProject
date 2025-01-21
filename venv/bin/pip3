@@ -1,5 +1,5 @@
 #!/bin/sh
-'''exec' "/mnt/c/Users/natha/Desktop/Cours/Théorie des langages/TDLProject/venv/bin/python3" "$0" "$@"
+'''exec' "/Users/tiago/Documents/Théorie Des Language/TDLProject/venv/bin/python3.13" "$0" "$@"
 ' '''
 # -*- coding: utf-8 -*-
 import re

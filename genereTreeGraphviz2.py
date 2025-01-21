@@ -26,5 +26,3 @@ def addNode(graph, t):
 
 
     return myId
-    
- 

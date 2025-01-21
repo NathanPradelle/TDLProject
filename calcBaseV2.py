@@ -3,13 +3,16 @@
 from genereTreeGraphviz2 import printTreeGraph
 
 reserved = {
-    'print': 'PRINT'
+    'print': 'PRINT',
+    'if':'IF',
+    'while':'WHILE',
+    'for':'FOR'
 
 }
 
 tokens = ['NUMBER', 'MINUS', 'PLUS', 'TIMES', 'DIVIDE', 'LPAREN',
           'RPAREN', 'OR', 'AND', 'SEMI', 'EGAL', 'NAME', 'INF', 'SUP',
-          'EGALEGAL', 'INFEG'] + list(reserved.values())
+          'EGALEGAL', 'INFEG', 'LBRACE', 'RBRACE'] + list(reserved.values())
 
 t_PLUS = r'\+'
 t_MINUS = r'-'
@@ -26,6 +29,8 @@ t_INF = r'\<'
 t_SUP = r'>'
 t_INFEG = r'\<\='
 t_EGALEGAL = r'\=\='
+t_LBRACE = r'\{'
+t_RBRACE = r'\}'
 
 
 def t_NAME(t):
@@ -93,7 +98,7 @@ def p_bloc(p):
     if len(p) == 3:
         p[0] = ('bloc', p[1], 'empty')
     else:
-        p[0] = ('bloc', p[1], p[2])
+        p[0] = ('bloc', p[1], p[3])
 
 
 def p_statement_expr(p):
@@ -106,6 +111,41 @@ def p_statement_assign(p):
     'statement : NAME EGAL expression'
     # names[p[1]]=p[3]
     p[0] = ('assign', p[1], p[3])
+
+def p_statement_if(p):
+    'statement : IF LPAREN expression RPAREN statement'
+    p[0] = ('if', p[3],p[5])
+
+def p_statement_for(p):
+    'statement : FOR LPAREN statement SEMI expression SEMI statement RPAREN statement'
+    p[0] = ('for', p[3], p[5], p[7], p[9])
+
+def p_statement_while(p):
+    'statement : WHILE LPAREN expression RPAREN statement '
+    p[0] = ('while',p[3], p[5])
+
+def p_param_list(p):
+    '''param_list : 
+        | NAME
+        | param_list COMMA NAME'''
+    if len(p) == 1:
+        p[0] = []  
+    elif len(p) == 2:
+        p[0] = [p[1]]
+    else:
+        p[0] = p[1] + [p[3]]
+
+def p_statement_return(p):
+    'statement : RETURN expression'
+    if len(p) == 1:
+        p[0] = [] 
+    else: 
+        p[0] = ('return', p[2])
+
+def p_statement_fonction(p):
+    'statement : NAME LPAREN param_list RPAREN LBRACE bloc RBRACE '
+    p[0] = (p[3], p[5])
+
 
 
 def p_expression_binop_inf(p):
@@ -136,9 +176,7 @@ def p_expression_name(p):
     'expression : NAME'
     p[0] = p[1]
 
-
 def p_error(p):    print("Syntax error in input!")
-
 
 import ply.yacc as yacc
 
