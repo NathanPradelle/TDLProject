@@ -253,8 +253,6 @@ def p_statement_function_def(p):
     'statement : NAME LPAREN param_list RPAREN LBRACE bloc RBRACE'
     p[0] = ('function_def', p[1], p[3], p[6])
 
-
-
 def p_statement_function_call(p):
     'statement : NAME LPAREN param_list RPAREN'
     p[0] = ('function_call', p[1], p[3])
@@ -274,8 +272,8 @@ def p_error(p):
 import ply.yacc as yacc
 yacc.yacc()
 s = '''
-for (i = 0; i < 4; i = i + 1) { 
-    print(i);
+for (i = 0; i < 4; i = i + 1) {
+    1+
 };
 '''
 yacc.parse(s)
