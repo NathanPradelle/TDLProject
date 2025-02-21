@@ -4,15 +4,17 @@ from genereTreeGraphviz2 import printTreeGraph
 
 reserved = {
     'print': 'PRINT',
-    'if':'IF',
-    'while':'WHILE',
-    'for':'FOR',
-    'return':'RETURN',
+    'if': 'IF',
+    'while': 'WHILE',
+    'else': 'ELSE',
+    'for': 'FOR',
+    'return': 'RETURN',
+    'global': 'GLOBAL'
 }
 
 tokens = ['NUMBER', 'MINUS', 'PLUS', 'TIMES', 'DIVIDE', 'LPAREN',
           'RPAREN', 'OR', 'AND', 'SEMI', 'EGAL', 'NAME', 'INF', 'SUP',
-          'EGALEGAL', 'INFEG', 'LBRACE', 'RBRACE', 'COMMA'] + list(reserved.values())
+          'EGALEGAL', 'INFEG', 'LBRACE', 'RBRACE', 'COMMA', 'COMMENT'] + list(reserved.values())
 
 t_PLUS = r'\+'
 t_MINUS = r'-'
@@ -31,37 +33,11 @@ t_EGALEGAL = r'=='
 t_LBRACE = r'\{'
 t_RBRACE = r'\}'
 t_COMMA = r','
-
-global_scope ={}
-local_scope =[{}]
-
-def get_variable(name):
-    for scope in reversed(local_scope):
-        if name in scope:
-            return scope[name]
-    if name in global_scope:
-        return global_scope[name]
-    raise NameError(f"Variable '{name}' non trouvée")
-
-def set_variable(name, value):
-    for scope in reversed(local_scope):
-        if name in scope:
-            scope[name] = value
-            return
-    global_scope[name] = value
-
-def enter_scope():
-    local_scope.append({})
-
-def exit_scope():
-    if len(local_scope) > 1:
-        local_scope.pop()
-    else:
-        raise Exception("Peut pas partir")
+t_COMMENT = r'\#.*'
 
 def t_NAME(t):
     r'[a-zA-Z_][a-zA-Z_0-9]*'
-    t.type = reserved.get(t.value, 'NAME')  
+    t.type = reserved.get(t.value, 'NAME')
     return t
 
 def t_NUMBER(t):
@@ -83,6 +59,7 @@ import ply.lex as lex
 lex.lex()
 
 names = {}
+functions = {}
 precedence = (
     ('left', 'OR'),
     ('left', 'AND'),
@@ -91,48 +68,107 @@ precedence = (
     ('left', 'TIMES', 'DIVIDE'),
 )
 
-def evalInst(p):
-    if isinstance(p, tuple):
-        def evalExpr(t):
-            if isinstance(t, int): 
-                return t
-            if isinstance(t, str): 
-                return get_variable(t)
-            if t[0] == '+': 
-                return eval(t[1]) + eval(t[2])
-            if t[0] == '-': 
-                return eval(t[1]) - eval(t[2])
-            if t[0] == '*': 
-                return eval(t[1]) * eval(t[2])
-            if t[0] == '/': 
-                return eval(t[1]) // eval(t[2])
-            if t[0] == '<': 
-                return eval(t[1]) < eval(t[2])
-            if t[0] == '>': 
-                return eval(t[1]) > eval(t[2])
-        
-        if p[0] == 'print':
-            print(evalExpr(p[1]))
-        elif p[0] == 'assign':
-            set_variable(p[1], evalExpr(p[2]))
-        elif p[0] == 'if':
-            condition = evalExpr(p[1])
-            if condition:
-                evalInst(p[2])
-        elif p[0] == 'while':
-            while evalExpr(p[1]):
-                evalInst(p[2])
-        elif p[0] == 'for':
-            evalInst(p[1])
-            while evalExpr(p[2]):  
-                evalInst(p[4])
-                evalInst(p[3])  
+def evalExpr(t, local_vars=None):
+
+    if isinstance(t, int):
+        return t
+    elif isinstance(t, str):
+        if local_vars is not None and t in local_vars:
+            if isinstance(local_vars, dict) and t in names:
+                return names[t]
+            else:
+                return local_vars[t]
+        elif t in names:
+            return names[t]
+        else:
+            raise NameError(f"DEBUG ERROR: Variable '{t}' non définie.")
+
+
+    if isinstance(t, tuple):
+        if t[0] == '+':
+            return evalExpr(t[1], local_vars) + evalExpr(t[2], local_vars)
+        elif t[0] == '-':
+            return evalExpr(t[1], local_vars) - evalExpr(t[2], local_vars)
+        elif t[0] == '*':
+            return evalExpr(t[1], local_vars) * evalExpr(t[2], local_vars)
+        elif t[0] == '/':
+            return evalExpr(t[1], local_vars) // evalExpr(t[2], local_vars)
+        elif t[0] == '<':
+            return evalExpr(t[1], local_vars) < evalExpr(t[2], local_vars)
+        elif t[0] == '>':
+            return evalExpr(t[1], local_vars) > evalExpr(t[2], local_vars)
+        elif t[0] == '==':
+            return evalExpr(t[1], local_vars) == evalExpr(t[2], local_vars)
+        elif t[0] == '<=':
+            return evalExpr(t[1], local_vars) <= evalExpr(t[2], local_vars)
+        elif t[0] == '>=':
+            return evalExpr(t[1], local_vars) >= evalExpr(t[2], local_vars)
+        elif t[0] == 'and':
+            return evalExpr(t[1], local_vars) and evalExpr(t[2], local_vars)
+        elif t[0] == 'or':
+            return evalExpr(t[1], local_vars) or evalExpr(t[2], local_vars)
+
+        raise ValueError(f"DEBUG ERROR: Expression inconnue : {t}")
+
+
+
+
+
+def evalInst(p, local_vars=None):
+    try:
+        global names
+        if local_vars is None:
+            local_vars = {}
+        if isinstance(p, tuple):
+            if p[0] == 'bloc':
+                result = evalInst(p[1], local_vars)
+                if result is not None:
+                    return result
+                if p[2] != 'empty':
+                    result = evalInst(p[2], local_vars)
+                    if result is not None:
+                        return result
+            elif p[0] == 'print':
+                value = evalExpr(p[1], local_vars)
+                print("calc >", value)
+            elif p[0] == 'assign':
+                names[p[1]] = evalExpr(p[2], local_vars)
+            elif p[0] == 'if':
+                if evalExpr(p[1], local_vars):
+                    return evalInst(p[2], local_vars)
+            elif p[0] == 'if_else':
+                if evalExpr(p[1], local_vars):
+                    return evalInst(p[2], local_vars)
+                else:
+                    return evalInst(p[3], local_vars)
+            elif p[0] == 'for':
+                evalInst(p[1], local_vars)
+                while evalExpr(p[2], local_vars):
+                    result = evalInst(p[4], local_vars)
+                    if result is not None:
+                        return result
+                    evalInst(p[3], local_vars)
+            elif p[0] == 'while':
+                while evalExpr(p[1], local_vars):
+                    result = evalInst(p[2], local_vars)
+                    if result is not None:
+                        return result
+            elif p[0] == 'return':
+                return evalExpr(p[1], local_vars)
+            else:
+                raise RuntimeError(f"Unknown instruction: {p}")
+    except Exception as e:
+        print(f"Execution error at line {p.lineno if hasattr(p, 'lineno') else 'unknown'}: {e}")
+
 
 def p_start(p):
     'start : bloc'
     print(p[1])
     printTreeGraph(p[1])
-    evalInst(p[1])
+    result = evalInst(p[1])
+    if result is not None:
+        print("calc >", result)
+
 
 def p_bloc(p):
     '''bloc : bloc statement SEMI
@@ -140,7 +176,10 @@ def p_bloc(p):
     if len(p) == 3:
         p[0] = ('bloc', p[1], 'empty')
     else:
-        p[0] = ('bloc', p[1], p[3])
+        if p[1][0] == 'return':
+            p[0] = p[1]
+        else:
+            p[0] = ('bloc', p[1], p[2])
 
 def p_statement_expr(p):
     'statement : PRINT LPAREN expression RPAREN'
@@ -151,23 +190,27 @@ def p_statement_assign(p):
     p[0] = ('assign', p[1], p[3])
 
 def p_statement_if(p):
-    'statement : IF LPAREN expression RPAREN statement'
-    p[0] = ('if', p[3], p[5])
+    'statement : IF LPAREN expression RPAREN LBRACE bloc RBRACE'
+    p[0] = ('if', p[3], p[6])
+
+def p_statement_if_else(p):
+    'statement : IF LPAREN expression RPAREN LBRACE bloc RBRACE ELSE LBRACE bloc RBRACE'
+    p[0] = ('if_else', p[3], p[6], p[10])
 
 def p_statement_for(p):
-    'statement : FOR LPAREN statement SEMI expression SEMI statement RPAREN statement'
-    p[0] = ('for', p[3], p[5], p[7], p[9])
+    'statement : FOR LPAREN statement SEMI expression SEMI statement RPAREN LBRACE bloc RBRACE'
+    p[0] = ('for', p[3], p[5], p[7], p[10])
 
 def p_statement_while(p):
-    'statement : WHILE LPAREN expression RPAREN statement '
-    p[0] = ('while', p[3], p[5])
+    'statement : WHILE LPAREN expression RPAREN LBRACE bloc RBRACE'
+    p[0] = ('while', p[3], p[6])
 
 def p_param_list(p):
-    '''param_list : 
+    '''param_list :
         | NAME
         | param_list COMMA NAME'''
     if len(p) == 1:
-        p[0] = []  
+        p[0] = []
     elif len(p) == 2:
         p[0] = [p[1]]
     else:
@@ -175,17 +218,11 @@ def p_param_list(p):
 
 def p_statement_return(p):
     'statement : RETURN expression'
-    p[0] = ('return', p[2])  
+    p[0] = ('return', p[2])
 
 def p_statement_return_empty(p):
     'statement : RETURN'
-    p[0] = ('return', None) 
-
-def p_statement_fonction(p):
-    'statement : NAME LPAREN param_list RPAREN LBRACE bloc RBRACE '
-    enter_scope()  
-    p[0] = (p[3], p[5])
-    exit_scope()  
+    p[0] = ('return', None)
 
 def p_expression_binop_inf(p):
     '''expression : expression INF expression
@@ -212,9 +249,33 @@ def p_expression_name(p):
     'expression : NAME'
     p[0] = p[1]
 
-def p_error(p):    print("Syntax error in input!")
+def p_statement_function_def(p):
+    'statement : NAME LPAREN param_list RPAREN LBRACE bloc RBRACE'
+    p[0] = ('function_def', p[1], p[3], p[6])
+
+
+
+def p_statement_function_call(p):
+    'statement : NAME LPAREN param_list RPAREN'
+    p[0] = ('function_call', p[1], p[3])
+
+def p_statement_global(p):
+    'statement : GLOBAL NAME'
+    p[0] = ('global', p[2])
+
+
+def p_error(p):
+    if p:
+        print(f"Syntax error at token '{p.value}', line {p.lineno}, position {p.lexpos}")
+    else:
+        print("Syntax error: unexpected end of input")
+    raise SyntaxError("Parsing error detected")
 
 import ply.yacc as yacc
 yacc.yacc()
-s = 'print(1+2);'
+s = '''
+for (i = 0; i < 4; i = i + 1) { 
+    print(i);
+};
+'''
 yacc.parse(s)
